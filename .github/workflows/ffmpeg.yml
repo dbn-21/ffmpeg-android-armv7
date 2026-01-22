@@ -1,4 +1,4 @@
-name: FFmpeg Android ARMv7 FULL (Monolith v2.8.1)
+name: FFmpeg Android v2.8.1 (Çalışan Monolith Yapı)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y yasm nasm pkg-config wget unzip git make
+        sudo apt install -y yasm nasm pkg-config wget unzip git make gcc
 
     - name: Download Android NDK r21e
       run: |
@@ -24,49 +24,51 @@ jobs:
 
     - name: Clone FFmpeg 2.8.15
       run: |
+        # lavf 56.40.101 sürümü için 2.8 dalı şarttır
         git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
         
-    - name: Build FFmpeg Monolith
+    - name: Build and Link Monolith
       run: |
         export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
-        
+
         cd FFmpeg
 
+        # 1. Konfigürasyon: Sembol versiyonlamayı kapatıyoruz (Android uyumu için kritik)
         ./configure \
           --target-os=android \
           --arch=arm \
           --cpu=armv7-a \
           --enable-cross-compile \
           --cc=$CC \
-          --strip=$STRIP \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID" \
           --disable-shared \
           --enable-static \
           --enable-gpl \
           --enable-version3 \
+          --enable-nonfree \
           --disable-asm \
           --disable-neon \
-          --enable-avcodec \
-          --enable-avformat \
-          --enable-avutil \
-          --enable-swscale \
-          --enable-swresample \
-          --enable-avfilter \
           --enable-postproc \
-          --disable-avdevice \
+          --enable-avfilter \
+          --disable-symver \
           --disable-doc \
           --disable-debug \
-          --disable-programs
+          --disable-programs \
+          --disable-ffmpeg \
+          --disable-ffplay \
+          --disable-ffprobe
 
         make -j$(nproc)
 
-        # KRİTİK ADIM: Tüm statik kütüphaneleri tek bir .so dosyasında birleştirme
-        $CC -shared -Wl,-soname,libffmpeg.so -Wl,--whole-archive \
+        # 2. Birleştirme (Linkleme): Uygulamanın tanıdığı tek dosya formatı
+        # Tüm bağımlılıkları (zlib, math, log) sonuna ekliyoruz
+        $CC -shared -Wl,-soname,libffmpeg.so \
+          -Wl,--whole-archive \
           libavcodec/libavcodec.a \
           libavformat/libavformat.a \
           libavutil/libavutil.a \
@@ -74,13 +76,14 @@ jobs:
           libswscale/libswscale.a \
           libavfilter/libavfilter.a \
           libpostproc/libpostproc.a \
-          -Wl,--no-whole-archive -z noexecstack -lc -lm -lz -ldl -llog \
+          -Wl,--no-whole-archive \
+          -z noexecstack -lc -lm -lz -ldl -llog \
           -o libffmpeg.so
 
-        $STRIP --strip-unneeded libffmpeg.so
+        # Uygulama sembolleri bulamazsa diye strip işlemini yapmıyoruz (boyut bu yüzden artabilir ama çalışması garantilenir)
 
-    - name: Upload FFmpeg Monolith Lib
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-android-single-so
+        name: libffmpeg-final
         path: FFmpeg/libffmpeg.so
