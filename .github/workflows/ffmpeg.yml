@@ -1,4 +1,4 @@
-name: FFmpeg Android ARMv7
+name: FFmpeg Android ARMv7 FULL
 
 on:
   workflow_dispatch:
@@ -8,13 +8,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Install build dependencies
+    - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y yasm nasm autoconf automake libtool pkg-config unzip wget
+        sudo apt install -y yasm nasm pkg-config unzip wget
 
     - name: Download Android NDK r21e
       run: |
@@ -27,7 +26,7 @@ jobs:
         cd FFmpeg
         git checkout n3.4.13
 
-    - name: Build libavcodec (armeabi-v7a)
+    - name: Build FULL FFmpeg (armeabi-v7a)
       run: |
         export NDK=$PWD/android-ndk-r21e
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
@@ -42,21 +41,25 @@ jobs:
         --enable-cross-compile \
         --cc=$CC \
         --sysroot=$TOOLCHAIN/sysroot \
-        --disable-programs \
-        --disable-doc \
-        --disable-debug \
-        --disable-everything \
-        --enable-avcodec \
         --enable-shared \
         --disable-static \
-        --enable-small \
-        --disable-asm \
-        --disable-neon
+        --enable-gpl \
+        --enable-version3 \
+        --enable-neon \
+        --enable-asm \
+        --enable-avcodec \
+        --enable-avformat \
+        --enable-avutil \
+        --enable-swscale \
+        --enable-swresample \
+        --disable-doc \
+        --disable-debug \
+        --disable-programs
 
         make -j$(nproc)
 
-    - name: Upload libavcodec.so
+    - name: Upload FULL FFmpeg libraries
       uses: actions/upload-artifact@v4
       with:
-        name: libavcodec-56.40.101-armeabi-v7a
-        path: FFmpeg/libavcodec/libavcodec.so
+        name: ffmpeg-armeabi-v7a-full
+        path: FFmpeg/*.so
