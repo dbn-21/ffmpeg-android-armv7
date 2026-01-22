@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (Çalışan Monolith Yapı)
+name: FFmpeg Android v2.8.1 (FIXED MONOLITH)
 
 on:
   workflow_dispatch:
@@ -24,7 +24,6 @@ jobs:
 
     - name: Clone FFmpeg 2.8.15
       run: |
-        # lavf 56.40.101 sürümü için 2.8 dalı şarttır
         git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
         
     - name: Build and Link Monolith
@@ -37,7 +36,8 @@ jobs:
 
         cd FFmpeg
 
-        # 1. Konfigürasyon: Sembol versiyonlamayı kapatıyoruz (Android uyumu için kritik)
+        # Hatalı olan v4l2 ve avdevice'ı özellikle kapatıyoruz. 
+        # Ayrıca ioctl hatasını engellemek için --disable-avdevice ekledik.
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -45,7 +45,7 @@ jobs:
           --enable-cross-compile \
           --cc=$CC \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -D__ANDROID_API__=21" \
           --disable-shared \
           --enable-static \
           --enable-gpl \
@@ -55,18 +55,17 @@ jobs:
           --disable-neon \
           --enable-postproc \
           --enable-avfilter \
+          --disable-avdevice \
+          --disable-indevs \
+          --disable-outdevs \
           --disable-symver \
           --disable-doc \
           --disable-debug \
-          --disable-programs \
-          --disable-ffmpeg \
-          --disable-ffplay \
-          --disable-ffprobe
+          --disable-programs
 
         make -j$(nproc)
 
-        # 2. Birleştirme (Linkleme): Uygulamanın tanıdığı tek dosya formatı
-        # Tüm bağımlılıkları (zlib, math, log) sonuna ekliyoruz
+        # Tek bir .so dosyasında birleştirme (Monolith)
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
@@ -80,10 +79,8 @@ jobs:
           -z noexecstack -lc -lm -lz -ldl -llog \
           -o libffmpeg.so
 
-        # Uygulama sembolleri bulamazsa diye strip işlemini yapmıyoruz (boyut bu yüzden artabilir ama çalışması garantilenir)
-
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-final
+        name: libffmpeg-fixed
         path: FFmpeg/libffmpeg.so
