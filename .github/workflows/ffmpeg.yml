@@ -33,14 +33,16 @@ jobs:
         export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
-        # Derleyici yolunu doğrudan tanımlıyoruz
-        export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         
-        # Çıktıların toplanacağı klasör
+        # Kritik araçların yolları
+        export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
+        export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
+        
         mkdir -p $GITHUB_WORKSPACE/ffmpeg-output
         
         cd FFmpeg
         
+        # --strip ekleyerek sistemin varsayılan strip aracını kullanmasını engelliyoruz
         ./configure \
           --prefix=$GITHUB_WORKSPACE/ffmpeg-output \
           --target-os=android \
@@ -48,6 +50,7 @@ jobs:
           --cpu=armv7-a \
           --enable-cross-compile \
           --cc=$CC \
+          --strip=$STRIP \
           --sysroot=$SYSROOT \
           --enable-shared \
           --disable-static \
@@ -60,12 +63,14 @@ jobs:
           --enable-avutil \
           --enable-swscale \
           --enable-swresample \
+          --enable-avfilter \
           --disable-avdevice \
           --disable-doc \
           --disable-debug \
           --disable-programs
 
         make -j$(nproc)
+        # Hata payını azaltmak için install adımını strip olmadan da yapabiliriz
         make install
 
     - name: Upload FFmpeg ARMv7 libs
