@@ -1,4 +1,4 @@
-name: FFmpeg Android ARMv7 FULL (v2.8.1)
+name: FFmpeg Android ARMv7 FULL (Monolith v2.8.1)
 
 on:
   workflow_dispatch:
@@ -24,38 +24,29 @@ jobs:
 
     - name: Clone FFmpeg 2.8.15
       run: |
-        # lavf 56.40.101 için 2.8 serisi gereklidir
         git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
         
-    - name: Build FFmpeg FULL (armeabi-v7a)
+    - name: Build FFmpeg Monolith
       run: |
         export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
-        
-        # Derleyici ve Araç Yolları
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
-        export NM=$TOOLCHAIN/bin/arm-linux-androideabi-nm
-        
-        mkdir -p $GITHUB_WORKSPACE/ffmpeg-output
         
         cd FFmpeg
-        
-        # Eski FFmpeg sürümleri için cross-prefix ve ekstra flaglar gerekebilir
+
         ./configure \
-          --prefix=$GITHUB_WORKSPACE/ffmpeg-output \
           --target-os=android \
           --arch=arm \
           --cpu=armv7-a \
           --enable-cross-compile \
           --cc=$CC \
           --strip=$STRIP \
-          --nm=$NM \
           --sysroot=$SYSROOT \
           --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16" \
-          --enable-shared \
-          --disable-static \
+          --disable-shared \
+          --enable-static \
           --enable-gpl \
           --enable-version3 \
           --disable-asm \
@@ -66,16 +57,30 @@ jobs:
           --enable-swscale \
           --enable-swresample \
           --enable-avfilter \
+          --enable-postproc \
           --disable-avdevice \
           --disable-doc \
           --disable-debug \
           --disable-programs
 
         make -j$(nproc)
-        make install
 
-    - name: Upload FFmpeg ARMv7 libs
+        # KRİTİK ADIM: Tüm statik kütüphaneleri tek bir .so dosyasında birleştirme
+        $CC -shared -Wl,-soname,libffmpeg.so -Wl,--whole-archive \
+          libavcodec/libavcodec.a \
+          libavformat/libavformat.a \
+          libavutil/libavutil.a \
+          libswresample/libswresample.a \
+          libswscale/libswscale.a \
+          libavfilter/libavfilter.a \
+          libpostproc/libpostproc.a \
+          -Wl,--no-whole-archive -z noexecstack -lc -lm -lz -ldl -llog \
+          -o libffmpeg.so
+
+        $STRIP --strip-unneeded libffmpeg.so
+
+    - name: Upload FFmpeg Monolith Lib
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-armeabi-v7a-v2.8.1
-        path: ffmpeg-output/lib/*.so
+        name: ffmpeg-android-single-so
+        path: FFmpeg/libffmpeg.so
