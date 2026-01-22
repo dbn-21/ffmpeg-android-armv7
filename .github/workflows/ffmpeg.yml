@@ -8,12 +8,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y yasm nasm pkg-config unzip wget
+        sudo apt install -y \
+        yasm nasm pkg-config \
+        wget unzip git
 
     - name: Download Android NDK r21e
       run: |
@@ -26,13 +29,14 @@ jobs:
         cd FFmpeg
         git checkout n3.4.13
 
-    - name: Build FULL FFmpeg (armeabi-v7a)
+    - name: Build FFmpeg FULL (armeabi-v7a)
       run: |
         export NDK=$PWD/android-ndk-r21e
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
 
         cd FFmpeg
+        make clean || true
 
         ./configure \
         --target-os=android \
@@ -52,13 +56,14 @@ jobs:
         --enable-avutil \
         --enable-swscale \
         --enable-swresample \
+        --disable-avdevice \
         --disable-doc \
         --disable-debug \
         --disable-programs
 
         make -j$(nproc)
 
-    - name: Upload FULL FFmpeg libraries
+    - name: Upload FFmpeg ARMv7 libs
       uses: actions/upload-artifact@v4
       with:
         name: ffmpeg-armeabi-v7a-full
