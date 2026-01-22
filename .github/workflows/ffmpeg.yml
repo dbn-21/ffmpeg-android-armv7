@@ -1,0 +1,61 @@
+name: FFmpeg Android ARMv7
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install deps
+      run: |
+        sudo apt update
+        sudo apt install -y yasm nasm pkg-config
+
+    - name: Download NDK
+      run: |
+        wget https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip
+        unzip android-ndk-r21e-linux-x86_64.zip
+
+    - name: Clone FFmpeg 3.4.13
+      run: |
+        git clone https://github.com/FFmpeg/FFmpeg.git
+        cd FFmpeg
+        git checkout n3.4.13
+
+    - name: Build libavcodec (armeabi-v7a)
+      run: |
+        export NDK=$PWD/android-ndk-r21e
+        export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+        export API=21
+        export TARGET=armv7a-linux-androideabi
+        export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
+
+        cd FFmpeg
+
+        ./configure \
+        --target-os=android \
+        --arch=arm \
+        --cpu=armv7-a \
+        --enable-cross-compile \
+        --cc=$CC \
+        --sysroot=$TOOLCHAIN/sysroot \
+        --disable-programs \
+        --disable-doc \
+        --disable-everything \
+        --enable-avcodec \
+        --enable-shared \
+        --disable-static \
+        --enable-small
+
+        make -j$(nproc)
+
+    - name: Upload libavcodec.so
+      uses: actions/upload-artifact@v4
+      with:
+        name: libavcodec-56.40.101-armeabi-v7a
+        path: FFmpeg/libavcodec/libavcodec.so
