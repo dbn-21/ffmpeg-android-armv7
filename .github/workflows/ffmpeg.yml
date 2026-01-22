@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (FIXED MONOLITH)
+name: FFmpeg Android v2.8.1 (FAT MONOLITH)
 
 on:
   workflow_dispatch:
@@ -26,46 +26,52 @@ jobs:
       run: |
         git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
         
-    - name: Build and Link Monolith
+    - name: Build Fat Monolith
       run: |
         export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
+        export AR=$TOOLCHAIN/bin/arm-linux-androideabi-ar
 
         cd FFmpeg
 
-        # Hatalı olan v4l2 ve avdevice'ı özellikle kapatıyoruz. 
-        # Ayrıca ioctl hatasını engellemek için --disable-avdevice ekledik.
+        # Boyutu artırmak için her şeyi aktif ediyoruz
         ./configure \
           --target-os=android \
           --arch=arm \
           --cpu=armv7-a \
           --enable-cross-compile \
           --cc=$CC \
+          --ar=$AR \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -D__ANDROID_API__=21" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID" \
           --disable-shared \
           --enable-static \
           --enable-gpl \
           --enable-version3 \
           --enable-nonfree \
-          --disable-asm \
-          --disable-neon \
           --enable-postproc \
           --enable-avfilter \
-          --disable-avdevice \
-          --disable-indevs \
-          --disable-outdevs \
-          --disable-symver \
+          --enable-runtime-cpudetect \
+          --enable-pthreads \
+          --disable-asm \
+          --disable-neon \
           --disable-doc \
           --disable-debug \
-          --disable-programs
+          --disable-programs \
+          --disable-ffmpeg \
+          --disable-ffplay \
+          --disable-ffprobe \
+          --disable-symver \
+          --disable-avdevice # Hata veren modül
 
         make -j$(nproc)
 
-        # Tek bir .so dosyasında birleştirme (Monolith)
+        # LINKLEME AŞAMASI (Boyutu belirleyen yer burası)
+        # Bütün .a dosyalarını istisnasız içeri alıyoruz. 
+        # --whole-archive ile --no-whole-archive arasındakiler kütüphaneye zorla gömülür.
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
@@ -79,8 +85,11 @@ jobs:
           -z noexecstack -lc -lm -lz -ldl -llog \
           -o libffmpeg.so
 
+        # NOT: STRIP işlemini bilerek YAPMIYORUZ. 
+        # Boyut büyük kalsın ve tüm semboller uygulamanın göreceği şekilde dursun.
+
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-fixed
+        name: libffmpeg-fat
         path: FFmpeg/libffmpeg.so
