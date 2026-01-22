@@ -1,4 +1,4 @@
-name: FFmpeg Android ARMv7 FULL
+name: FFmpeg Android ARMv7 FULL (v2.8.1)
 
 on:
   workflow_dispatch:
@@ -14,9 +14,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y \
-        yasm nasm pkg-config \
-        wget unzip git make
+        sudo apt install -y yasm nasm pkg-config wget unzip git make
 
     - name: Download Android NDK r21e
       run: |
@@ -24,9 +22,10 @@ jobs:
         unzip -q ndk.zip
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r21e" >> $GITHUB_ENV
 
-    - name: Clone FFmpeg 3.4.13
+    - name: Clone FFmpeg 2.8.15
       run: |
-        git clone --depth 1 --branch n3.4.13 https://github.com/FFmpeg/FFmpeg.git
+        # lavf 56.40.101 için 2.8 serisi gereklidir
+        git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
         
     - name: Build FFmpeg FULL (armeabi-v7a)
       run: |
@@ -34,15 +33,16 @@ jobs:
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         
-        # Kritik araçların yolları
+        # Derleyici ve Araç Yolları
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
+        export NM=$TOOLCHAIN/bin/arm-linux-androideabi-nm
         
         mkdir -p $GITHUB_WORKSPACE/ffmpeg-output
         
         cd FFmpeg
         
-        # --strip ekleyerek sistemin varsayılan strip aracını kullanmasını engelliyoruz
+        # Eski FFmpeg sürümleri için cross-prefix ve ekstra flaglar gerekebilir
         ./configure \
           --prefix=$GITHUB_WORKSPACE/ffmpeg-output \
           --target-os=android \
@@ -51,7 +51,9 @@ jobs:
           --enable-cross-compile \
           --cc=$CC \
           --strip=$STRIP \
+          --nm=$NM \
           --sysroot=$SYSROOT \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16" \
           --enable-shared \
           --disable-static \
           --enable-gpl \
@@ -70,11 +72,10 @@ jobs:
           --disable-programs
 
         make -j$(nproc)
-        # Hata payını azaltmak için install adımını strip olmadan da yapabiliriz
         make install
 
     - name: Upload FFmpeg ARMv7 libs
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-armeabi-v7a-full
+        name: ffmpeg-armeabi-v7a-v2.8.1
         path: ffmpeg-output/lib/*.so
