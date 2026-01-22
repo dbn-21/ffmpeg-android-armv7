@@ -16,55 +16,60 @@ jobs:
         sudo apt update
         sudo apt install -y \
         yasm nasm pkg-config \
-        wget unzip git
+        wget unzip git make
 
     - name: Download Android NDK r21e
       run: |
-        wget -O ndk.zip https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip
-        unzip ndk.zip
+        wget -q https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip -O ndk.zip
+        unzip -q ndk.zip
+        echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r21e" >> $GITHUB_ENV
 
     - name: Clone FFmpeg 3.4.13
       run: |
-        git clone https://github.com/FFmpeg/FFmpeg.git
-        cd FFmpeg
-        git checkout n3.4.13
-
+        git clone --depth 1 --branch n3.4.13 https://github.com/FFmpeg/FFmpeg.git
+        
     - name: Build FFmpeg FULL (armeabi-v7a)
       run: |
-        export NDK=$PWD/android-ndk-r21e
+        export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+        export SYSROOT=$TOOLCHAIN/sysroot
+        # Derleyici yolunu doğrudan tanımlıyoruz
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
-
+        
+        # Çıktıların toplanacağı klasör
+        mkdir -p $GITHUB_WORKSPACE/ffmpeg-output
+        
         cd FFmpeg
-        make clean || true
-
+        
         ./configure \
-        --target-os=android \
-        --arch=arm \
-        --cpu=armv7-a \
-        --enable-cross-compile \
-        --cc=$CC \
-        --sysroot=$TOOLCHAIN/sysroot \
-        --enable-shared \
-        --disable-static \
-        --enable-gpl \
-        --enable-version3 \
-        --disable-asm \
-        --disable-neon \
-        --enable-avcodec \
-        --enable-avformat \
-        --enable-avutil \
-        --enable-swscale \
-        --enable-swresample \
-        --disable-avdevice \
-        --disable-doc \
-        --disable-debug \
-        --disable-programs
+          --prefix=$GITHUB_WORKSPACE/ffmpeg-output \
+          --target-os=android \
+          --arch=arm \
+          --cpu=armv7-a \
+          --enable-cross-compile \
+          --cc=$CC \
+          --sysroot=$SYSROOT \
+          --enable-shared \
+          --disable-static \
+          --enable-gpl \
+          --enable-version3 \
+          --disable-asm \
+          --disable-neon \
+          --enable-avcodec \
+          --enable-avformat \
+          --enable-avutil \
+          --enable-swscale \
+          --enable-swresample \
+          --disable-avdevice \
+          --disable-doc \
+          --disable-debug \
+          --disable-programs
 
         make -j$(nproc)
+        make install
 
     - name: Upload FFmpeg ARMv7 libs
       uses: actions/upload-artifact@v4
       with:
         name: ffmpeg-armeabi-v7a-full
-        path: FFmpeg/*.so
+        path: ffmpeg-output/lib/*.so
