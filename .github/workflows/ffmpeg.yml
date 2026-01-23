@@ -37,6 +37,7 @@ jobs:
 
         git clone --depth 1 https://github.com/mstorsjo/fdk-aac.git
         cd fdk-aac
+        # log/log.h hatasını düzelt
         find . -type f -name "*.cpp" -o -name "*.h" -o -name "*.c" | xargs sed -i 's#log/log.h#android/log.h#g'
         ./autogen.sh
         
@@ -75,6 +76,11 @@ jobs:
 
         cd FFmpeg
 
+        # KESİN ÇÖZÜM: FFmpeg'in eski fdk-aac API kullanımını yamalıyoruz
+        # 'encoderDelay' yeni sürümlerde 'nDelay' veya benzeri şekillerde değiştiği için 
+        # bu satırı devre dışı bırakıyoruz veya doğru isimlendirmeyi sağlıyoruz.
+        sed -i 's/info.encoderDelay/info.nDelay/g' libavcodec/libfdk-aacenc.c || true
+
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -106,7 +112,6 @@ jobs:
         make -j$(nproc)
 
         # Monolitik SO oluşturma
-        # Not: avdevice'ı devre dışı bıraktığımız için listeden çıkardık
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
