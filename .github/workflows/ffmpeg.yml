@@ -14,7 +14,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y yasm nasm pkg-config wget unzip git make gcc g++ autoconf automake libtool
+        sudo apt install -y yasm nasm pkg-config wget unzip git make gcc g++ autoconf automake libtool libtool-bin
 
     - name: Download Android NDK r21e
       run: |
@@ -31,9 +31,10 @@ jobs:
 
         git clone https://github.com/mstorsjo/fdk-aac.git
         cd fdk-aac
+        libtoolize --force --copy
         autoreconf -fiv
         ./configure \
-          --host=arm-linux-androideabi \
+          --host=armv7a-linux-androideabi \
           --enable-shared \
           --prefix=$GITHUB_WORKSPACE/fdk-aac-android \
           CC=$CC \
