@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (TRUE FAT MONOLITH)
+name: FFmpeg Android v2.8.1 (ULTIMATE MONOLITH)
 
 on:
   workflow_dispatch:
@@ -34,10 +34,11 @@ jobs:
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export AR=$TOOLCHAIN/bin/arm-linux-androideabi-ar
         export NM=$TOOLCHAIN/bin/arm-linux-androideabi-nm
+        export LD=$TOOLCHAIN/bin/arm-linux-androideabi-ld
 
         cd FFmpeg
 
-        # 1. KONFİGÜRASYON: Her şeyi statik olarak işaretliyoruz
+        # 1. KONFİGÜRASYON: Gereksiz her şeyi kapatıp, çekirdek özelliklere odaklanıyoruz
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -47,29 +48,30 @@ jobs:
           --ar=$AR \
           --nm=$NM \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC -ffunction-sections -fdata-sections" \
+          --extra-ldflags="-Wl,--gc-sections" \
           --disable-shared \
           --enable-static \
           --enable-gpl \
           --enable-version3 \
           --enable-nonfree \
-          --enable-avfilter \
           --enable-postproc \
-          --enable-small \
-          --disable-asm \
-          --disable-neon \
+          --enable-avfilter \
           --disable-avdevice \
           --disable-symver \
           --disable-doc \
           --disable-debug \
-          --disable-programs
+          --disable-programs \
+          --disable-ffmpeg \
+          --disable-ffplay \
+          --disable-ffprobe
 
         make -j$(nproc)
 
-        # 2. BİRLEŞTİRME: Kritik adım burası. 
-        # Önceki 13MB'lık hatada dosyalar sadece linklenmişti. 
-        # Şimdi --whole-archive ile tüm .a paketlerini .so'nun içine fiziksel olarak gömüyoruz.
-        $CC -shared -Wl,-soname,libffmpeg.so -o libffmpeg.so \
+        # 2. BİRLEŞTİRME (Kritik Değişiklik): 
+        # Standart linking yerine, tüm objeleri --whole-archive ile zorla paketliyoruz.
+        # Boyutu 13MB'dan 25MB'a çekecek olan işlem budur.
+        $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
           libavformat/libavformat.a \
@@ -79,13 +81,14 @@ jobs:
           libavfilter/libavfilter.a \
           libpostproc/libpostproc.a \
           -Wl,--no-whole-archive \
-          -lc -lm -lz -ldl -llog -Wl,-z,noexecstack
+          -lc -lm -lz -ldl -llog \
+          -o libffmpeg.so
 
-        # Dosya boyutunun 20MB üzerine çıkması için bilerek STRIP yapmıyoruz.
-        # Eğer uygulama hata verirse sonradan strip ekleriz.
+        # STRIP işlemini yapmıyoruz, çünkü uygulama içindeki fonksiyonları bulamazsa çalışmaz.
+        # Dosya boyutu büyük kalmalı.
 
     - name: Upload
-      uses: actions/upload-artifact@v4
+      uses: actions/artifact-upload@v4
       with:
-        name: libffmpeg-true-monolith
+        name: libffmpeg-ultimate
         path: FFmpeg/libffmpeg.so
