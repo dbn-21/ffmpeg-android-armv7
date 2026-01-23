@@ -28,7 +28,7 @@ jobs:
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         
-        # Araç Yolları
+        # Araçları Tanımla
         export CC="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang"
         export CXX="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang++"
         export AR="$TOOLCHAIN/bin/arm-linux-androideabi-ar"
@@ -40,7 +40,7 @@ jobs:
         cd fdk-aac
         ./autogen.sh
         
-        # Log hatasını önlemek için CPPFLAGS eklendi
+        # Hata Çözümü: log/log.h için include yollarını zorluyoruz
         ./configure \
           --host=arm-linux-androideabi \
           --enable-static \
@@ -101,8 +101,7 @@ jobs:
 
         make -j$(nproc)
 
-        # Monolitik .so dosyasını oluşturma adımı
-        # Tüm .a dosyalarını libffmpeg.so içerisinde birleştiriyoruz
+        # Monolitik SO oluşturma (Daha sağlam bağlama sırası)
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
