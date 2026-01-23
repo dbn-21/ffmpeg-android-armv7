@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (ULTIMATE MONOLITH)
+name: FFmpeg Android v2.8.1 (FINAL SUCCESS)
 
 on:
   workflow_dispatch:
@@ -34,11 +34,10 @@ jobs:
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export AR=$TOOLCHAIN/bin/arm-linux-androideabi-ar
         export NM=$TOOLCHAIN/bin/arm-linux-androideabi-nm
-        export LD=$TOOLCHAIN/bin/arm-linux-androideabi-ld
 
         cd FFmpeg
 
-        # 1. KONFİGÜRASYON: Gereksiz her şeyi kapatıp, çekirdek özelliklere odaklanıyoruz
+        # ASM'yi açıyoruz (yasm/nasm yüklü olduğu için hata vermez ve boyut artar)
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -48,10 +47,9 @@ jobs:
           --ar=$AR \
           --nm=$NM \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC -ffunction-sections -fdata-sections" \
-          --extra-ldflags="-Wl,--gc-sections" \
-          --disable-shared \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC" \
           --enable-static \
+          --disable-shared \
           --enable-gpl \
           --enable-version3 \
           --enable-nonfree \
@@ -61,16 +59,11 @@ jobs:
           --disable-symver \
           --disable-doc \
           --disable-debug \
-          --disable-programs \
-          --disable-ffmpeg \
-          --disable-ffplay \
-          --disable-ffprobe
+          --disable-programs
 
         make -j$(nproc)
 
-        # 2. BİRLEŞTİRME (Kritik Değişiklik): 
-        # Standart linking yerine, tüm objeleri --whole-archive ile zorla paketliyoruz.
-        # Boyutu 13MB'dan 25MB'a çekecek olan işlem budur.
+        # MONOLITH LINKING (Tüm statik kütüphaneleri zorla içeri gömme)
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
@@ -81,14 +74,11 @@ jobs:
           libavfilter/libavfilter.a \
           libpostproc/libpostproc.a \
           -Wl,--no-whole-archive \
-          -lc -lm -lz -ldl -llog \
+          -z noexecstack -lc -lm -lz -ldl -llog \
           -o libffmpeg.so
 
-        # STRIP işlemini yapmıyoruz, çünkü uygulama içindeki fonksiyonları bulamazsa çalışmaz.
-        # Dosya boyutu büyük kalmalı.
-
-    - name: Upload
-      uses: actions/artifact-upload@v4
+    - name: Upload Final Lib
+      uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-ultimate
+        name: libffmpeg-monolith
         path: FFmpeg/libffmpeg.so
