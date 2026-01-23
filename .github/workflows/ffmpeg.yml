@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (TRUE MONOLITH)
+name: FFmpeg Android v2.8.1 (TRUE FAT MONOLITH)
 
 on:
   workflow_dispatch:
@@ -33,13 +33,11 @@ jobs:
         export SYSROOT=$TOOLCHAIN/sysroot
         export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
         export AR=$TOOLCHAIN/bin/arm-linux-androideabi-ar
-        export STRIP=$TOOLCHAIN/bin/arm-linux-androideabi-strip
+        export NM=$TOOLCHAIN/bin/arm-linux-androideabi-nm
 
         cd FFmpeg
 
-        # 1. KONFİGÜRASYON
-        # --disable-shared ve --enable-static: Modülleri dosyanın içine gömmek için şart.
-        # --disable-symver: Android linker hatalarını engeller.
+        # 1. KONFİGÜRASYON: Her şeyi statik olarak işaretliyoruz
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -47,15 +45,19 @@ jobs:
           --enable-cross-compile \
           --cc=$CC \
           --ar=$AR \
+          --nm=$NM \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC" \
           --disable-shared \
           --enable-static \
           --enable-gpl \
           --enable-version3 \
           --enable-nonfree \
-          --enable-postproc \
           --enable-avfilter \
+          --enable-postproc \
+          --enable-small \
+          --disable-asm \
+          --disable-neon \
           --disable-avdevice \
           --disable-symver \
           --disable-doc \
@@ -64,10 +66,10 @@ jobs:
 
         make -j$(nproc)
 
-        # 2. BİRLEŞTİRME (MONOLITH LINKING)
-        # ÖNEMLİ: Bu aşama tüm .a (statik kütüphane) dosyalarını tek bir .so içinde toplar.
-        # Boyutun 13MB'dan yukarı çıkmasını sağlayan yer burasıdır.
-        $CC -shared -Wl,-soname,libffmpeg.so \
+        # 2. BİRLEŞTİRME: Kritik adım burası. 
+        # Önceki 13MB'lık hatada dosyalar sadece linklenmişti. 
+        # Şimdi --whole-archive ile tüm .a paketlerini .so'nun içine fiziksel olarak gömüyoruz.
+        $CC -shared -Wl,-soname,libffmpeg.so -o libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
           libavformat/libavformat.a \
@@ -77,14 +79,13 @@ jobs:
           libavfilter/libavfilter.a \
           libpostproc/libpostproc.a \
           -Wl,--no-whole-archive \
-          -z noexecstack -lc -lm -lz -ldl -llog \
-          -o libffmpeg.so
+          -lc -lm -lz -ldl -llog -Wl,-z,noexecstack
 
-        # Uygulamanın sembolleri bulabilmesi için strip işlemini yapmıyoruz. 
-        # Boyutun Magiclen dosyasına yakın (20-25MB) çıkması gerekiyor.
+        # Dosya boyutunun 20MB üzerine çıkması için bilerek STRIP yapmıyoruz.
+        # Eğer uygulama hata verirse sonradan strip ekleriz.
 
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-monolith
+        name: libffmpeg-true-monolith
         path: FFmpeg/libffmpeg.so
