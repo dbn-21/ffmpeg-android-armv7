@@ -28,7 +28,7 @@ jobs:
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         
-        # Değişiklik: CC ve diğer araçları tam yol olarak ve doğru bayraklarla tanımlıyoruz
+        # Araç Yolları
         export CC="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang"
         export CXX="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang++"
         export AR="$TOOLCHAIN/bin/arm-linux-androideabi-ar"
@@ -40,20 +40,21 @@ jobs:
         cd fdk-aac
         ./autogen.sh
         
-        # Değişiklik: CFLAGS ekledik ve host/target tanımlarını netleştirdik
+        # Log hatasını önlemek için CPPFLAGS eklendi
         ./configure \
           --host=arm-linux-androideabi \
-          --target=android \
           --enable-static \
           --disable-shared \
           --prefix=$GITHUB_WORKSPACE/fdk-aac-android \
           --with-sysroot=$SYSROOT \
-          CFLAGS="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16" \
           CC="$CC" \
           CXX="$CXX" \
           AR="$AR" \
           RANLIB="$RANLIB" \
-          STRIP="$STRIP"
+          STRIP="$STRIP" \
+          CFLAGS="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -fPIC" \
+          CPPFLAGS="-I$SYSROOT/usr/include -I$SYSROOT/usr/include/arm-linux-androideabi" \
+          LDFLAGS="-L$SYSROOT/usr/lib/arm-linux-androideabi/21"
 
         make -j$(nproc)
         make install
@@ -92,11 +93,16 @@ jobs:
           --enable-libfdk_aac \
           --disable-doc \
           --disable-debug \
-          --disable-programs
+          --disable-programs \
+          --disable-ffmpeg \
+          --disable-ffplay \
+          --disable-ffprobe \
+          --disable-symver
 
         make -j$(nproc)
 
-        # Monolitik SO dosyasını oluşturma
+        # Monolitik .so dosyasını oluşturma adımı
+        # Tüm .a dosyalarını libffmpeg.so içerisinde birleştiriyoruz
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
@@ -105,13 +111,13 @@ jobs:
           libswresample/libswresample.a \
           libswscale/libswscale.a \
           libavfilter/libavfilter.a \
-          -Wl,--no-whole-archive \
           $GITHUB_WORKSPACE/fdk-aac-android/lib/libfdk-aac.a \
+          -Wl,--no-whole-archive \
           -z noexecstack -lc -lm -lz -ldl -llog \
           -o libffmpeg.so
 
     - name: Upload Final Lib
       uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-monolith-fdk-aac
+        name: libffmpeg-android-armv7-fdk
         path: FFmpeg/libffmpeg.so
