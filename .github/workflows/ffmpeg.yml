@@ -1,4 +1,4 @@
-name: FFmpeg Android v2.8.1 (FINAL SUCCESS)
+name: FFmpeg Android v2.8.15 + libfdk_aac
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y yasm nasm pkg-config wget unzip git make gcc
+        sudo apt install -y yasm nasm pkg-config wget unzip git make gcc g++ autoconf automake libtool
 
     - name: Download Android NDK r21e
       run: |
@@ -22,11 +22,30 @@ jobs:
         unzip -q ndk.zip
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r21e" >> $GITHUB_ENV
 
+    - name: Build libfdk_aac
+      run: |
+        export NDK=${{ env.NDK_PATH }}
+        export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+        export SYSROOT=$TOOLCHAIN/sysroot
+        export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang
+
+        git clone https://github.com/mstorsjo/fdk-aac.git
+        cd fdk-aac
+        autoreconf -fiv
+        ./configure \
+          --host=arm-linux-androideabi \
+          --enable-shared \
+          --prefix=$GITHUB_WORKSPACE/fdk-aac-android \
+          CC=$CC \
+          --with-sysroot=$SYSROOT
+        make -j$(nproc)
+        make install
+
     - name: Clone FFmpeg 2.8.15
       run: |
         git clone --depth 1 --branch n2.8.15 https://github.com/FFmpeg/FFmpeg.git
-        
-    - name: Build Fat Monolith
+
+    - name: Build FFmpeg with libfdk_aac
       run: |
         export NDK=${{ env.NDK_PATH }}
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
@@ -37,7 +56,6 @@ jobs:
 
         cd FFmpeg
 
-        # ASM'yi açıyoruz (yasm/nasm yüklü olduğu için hata vermez ve boyut artar)
         ./configure \
           --target-os=android \
           --arch=arm \
@@ -47,7 +65,8 @@ jobs:
           --ar=$AR \
           --nm=$NM \
           --sysroot=$SYSROOT \
-          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC" \
+          --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC -I$GITHUB_WORKSPACE/fdk-aac-android/include" \
+          --extra-ldflags="-L$GITHUB_WORKSPACE/fdk-aac-android/lib" \
           --enable-static \
           --disable-shared \
           --enable-gpl \
@@ -55,15 +74,13 @@ jobs:
           --enable-nonfree \
           --enable-postproc \
           --enable-avfilter \
-          --disable-avdevice \
-          --disable-symver \
+          --enable-libfdk_aac \
           --disable-doc \
           --disable-debug \
           --disable-programs
 
         make -j$(nproc)
 
-        # MONOLITH LINKING (Tüm statik kütüphaneleri zorla içeri gömme)
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
@@ -80,5 +97,5 @@ jobs:
     - name: Upload Final Lib
       uses: actions/upload-artifact@v4
       with:
-        name: libffmpeg-monolith
+        name: libffmpeg-monolith-fdk-aac
         path: FFmpeg/libffmpeg.so
