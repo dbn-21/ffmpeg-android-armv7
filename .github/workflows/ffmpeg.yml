@@ -37,7 +37,6 @@ jobs:
 
         git clone --depth 1 https://github.com/mstorsjo/fdk-aac.git
         cd fdk-aac
-        # log/log.h hatasını düzelt
         find . -type f -name "*.cpp" -o -name "*.h" -o -name "*.c" | xargs sed -i 's#log/log.h#android/log.h#g'
         ./autogen.sh
         
@@ -76,9 +75,7 @@ jobs:
 
         cd FFmpeg
 
-        # KESİN ÇÖZÜM: FFmpeg'in eski fdk-aac API kullanımını yamalıyoruz
-        # 'encoderDelay' yeni sürümlerde 'nDelay' veya benzeri şekillerde değiştiği için 
-        # bu satırı devre dışı bırakıyoruz veya doğru isimlendirmeyi sağlıyoruz.
+        # fdk-aac API yaması
         sed -i 's/info.encoderDelay/info.nDelay/g' libavcodec/libfdk-aacenc.c || true
 
         ./configure \
@@ -91,7 +88,7 @@ jobs:
           --nm=$NM \
           --sysroot=$SYSROOT \
           --extra-cflags="-march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 -DANDROID -fPIC -I$GITHUB_WORKSPACE/fdk-aac-android/include" \
-          --extra-ldflags="-L$GITHUB_WORKSPACE/fdk-aac-android/lib" \
+          --extra-ldflags="-L$GITHUB_WORKSPACE/fdk-aac-android/lib -Wl,-Bsymbolic" \
           --enable-static \
           --disable-shared \
           --enable-gpl \
@@ -112,7 +109,10 @@ jobs:
         make -j$(nproc)
 
         # Monolitik SO oluşturma
+        # -Wl,-z,notext bayrağı "text segment is not shareable" hatasını bypass eder
         $CC -shared -Wl,-soname,libffmpeg.so \
+          -Wl,-z,notext \
+          -Wl,-Bsymbolic \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
           libavformat/libavformat.a \
