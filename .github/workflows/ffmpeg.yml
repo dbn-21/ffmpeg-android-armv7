@@ -28,7 +28,6 @@ jobs:
         export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
         export SYSROOT=$TOOLCHAIN/sysroot
         
-        # Araç Yolları
         export CC="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang"
         export CXX="$TOOLCHAIN/bin/armv7a-linux-androideabi21-clang++"
         export AR="$TOOLCHAIN/bin/arm-linux-androideabi-ar"
@@ -38,13 +37,9 @@ jobs:
 
         git clone --depth 1 https://github.com/mstorsjo/fdk-aac.git
         cd fdk-aac
-
-        # KESİN ÇÖZÜM: log/log.h hatasını kaynak kod seviyesinde düzeltiyoruz
         find . -type f -name "*.cpp" -o -name "*.h" -o -name "*.c" | xargs sed -i 's#log/log.h#android/log.h#g'
-
         ./autogen.sh
         
-        # Ekstra include yollarını çevre değişkeni olarak tanımlıyoruz
         export C_INCLUDE_PATH="$SYSROOT/usr/include:$SYSROOT/usr/include/arm-linux-androideabi"
         export CPLUS_INCLUDE_PATH="$C_INCLUDE_PATH"
 
@@ -103,11 +98,15 @@ jobs:
           --disable-ffmpeg \
           --disable-ffplay \
           --disable-ffprobe \
-          --disable-symver
+          --disable-symver \
+          --disable-avdevice \
+          --disable-indev=v4l2 \
+          --disable-outdev=v4l2
 
         make -j$(nproc)
 
         # Monolitik SO oluşturma
+        # Not: avdevice'ı devre dışı bıraktığımız için listeden çıkardık
         $CC -shared -Wl,-soname,libffmpeg.so \
           -Wl,--whole-archive \
           libavcodec/libavcodec.a \
